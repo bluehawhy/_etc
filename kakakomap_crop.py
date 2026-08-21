@@ -130,61 +130,84 @@ class KakaoSkyviewCapturer:
       print("브라우저 종료 완료")
 
 
+# 타입별 정리
+def load_data_file(file_path):
+    """CSV 또는 Excel(.xlsx, .xls) 파일을 판다스 데이터프레임으로 로드합니다."""
+    ext = os.path.splitext(file_path)[1].lower()
 
-# ==========================================
-# CSV 파일 처리 및 자동 배치 실행
-# ==========================================
-def process_uncaptured_images(csv_path, output_dir):
-  os.makedirs(output_dir, exist_ok=True)
-
-  try:
-    df = pd.read_csv(csv_path, encoding="utf-8-sig")
-  except UnicodeDecodeError:
-    df = pd.read_csv(csv_path, encoding="cp949")
-
-  target_df = df[df["작성여부"].str.upper() == "X"]
-  print(f"총 {len(df)}개 항목 중 대상(작성여부 X): {len(target_df)}개")
-
-  if target_df.empty:
-    print("처리할 대상이 없습니다.")
-    return
-
-  capturer = KakaoSkyviewCapturer()
-
-  try:
-    for idx, (_, row) in enumerate(target_df.iterrows(), start=1):
-      lat = row["위도"]
-      lng = row["경도"]
-      orig_filename = str(row["스크린샷"])
-
-      base_name, _ = os.path.splitext(orig_filename)
-      new_filename = f"{base_name}_kakaomap.png"
-      save_full_path = os.path.join(output_dir, new_filename)
-
-      # 이미 다운로드된 파일은 이어받기(Skip) 처리
-      if os.path.exists(save_full_path):
-        print(
-            f"[{idx}/{len(target_df)}] 이미 존재함 (Pass): {new_filename}"
+    if ext in [".xlsx", ".xls"]:
+        # openpyxl 라이브러리 필요 (pip install openpyxl)
+        return pd.read_excel(file_path)
+    elif ext == ".csv":
+        try:
+            return pd.read_csv(file_path, encoding="utf-8-sig")
+        except UnicodeDecodeError:
+            return pd.read_csv(file_path, encoding="cp949")
+    else:
+        raise ValueError(
+            f"지원하지 않는 파일 형식입니다: {ext} (CSV 또는 Excel 파일만 가능)"
         )
-        continue
 
-      print(f"[{idx}/{len(target_df)}] 진행 중...", end=" ")
-      capturer.capture(
-          lat=lat,
-          lng=lng,
-          save_path=save_full_path,
-          #crop_size=(800, 600),
-      )
+# ==========================================
+# 자동 배치 실행
+# ==========================================
+# ==========================================
+# 데이터 파일(CSV/Excel) 처리 및 자동 배치 실행
+# ==========================================
+def process_uncaptured_images(file_path, output_dir):
+    os.makedirs(output_dir, exist_ok=True)
 
-  finally:
-    capturer.close()
+    # Excel / CSV 자동 로드
+    try:
+        df = load_data_file(file_path)
+    except Exception as e:
+        print(f"파일을 읽는 중 오류가 발생했습니다: {e}")
+        return
+
+    # '작성여부' 컬럼 공백 제거 및 대문자 변환 후 'X'인 항목 필터링
+    target_df = df[df["작성여부"].astype(str).str.strip().str.upper() == "X"]
+    print(f"총 {len(df)}개 항목 중 대상(작성여부 X): {len(target_df)}개")
+
+    if target_df.empty:
+        print("처리할 대상이 없습니다.")
+        return
+
+    capturer = KakaoSkyviewCapturer()
+
+    try:
+        for idx, (_, row) in enumerate(target_df.iterrows(), start=1):
+            lat = row["위도"]
+            lng = row["경도"]
+            orig_filename = str(row["스크린샷"])
+
+            base_name, _ = os.path.splitext(orig_filename)
+            new_filename = f"{base_name}_kakaomap.png"
+            save_full_path = os.path.join(output_dir, new_filename)
+
+            # 이미 다운로드된 파일은 이어받기(Skip) 처리
+            if os.path.exists(save_full_path):
+                print(
+                    f"[{idx}/{len(target_df)}] 이미 존재함 (Pass): {new_filename}"
+                )
+                continue
+
+            print(f"[{idx}/{len(target_df)}] 진행 중...", end=" ")
+            capturer.capture(
+                lat=lat,
+                lng=lng,
+                save_path=save_full_path,
+                # crop_size=(800, 600),
+            )
+
+    finally:
+        capturer.close()
 
 
 if __name__ == "__main__":
   # 설정 경로
-  CSV_FILE_PATH = r"C:\Users\miskang\Downloads\결과_스크린샷검사.csv"
+  CSV_FILE_PATH = r"C:\Users\miskang\Downloads\노면색깔유도선_WGS84_부산_위치별정리.xlsx"
   #r"D:\project\NKM\NKM_부산색상유도선\노면색깔유도선_WGS84_부산_검수.csv"
-  OUTPUT_DIRECTORY = r'C:\Users\miskang\Downloads\색상유도선'
+  OUTPUT_DIRECTORY = r'C:\Users\miskang\Desktop\NKM_Tool'
   #r"D:\project\NKM\NKM_부산색상유도선\미감지"
 
   # 실행
